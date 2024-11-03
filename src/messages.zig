@@ -1,8 +1,6 @@
 const std = @import("std");
 
-pub const initiationMessage: [1]u8 = .{1};
-
-pub const broadcastResponse = struct {
+pub const BroadcastResponse = struct {
     chk: [4]u8,
     ip1: u8,
     ip2: u8,
@@ -12,11 +10,11 @@ pub const broadcastResponse = struct {
     gt: u8,
     gs: u8,
 
-    pub fn parse(buf: []const u8) !broadcastResponse {
+    pub fn parse(buf: []const u8) !BroadcastResponse {
         if (buf[0] != 2) return error.InvalidResponse;
         if (buf.len < 12) return error.BufferTooSmall;
 
-        return broadcastResponse{
+        return BroadcastResponse{
             .chk = buf[0..4].*,
             .ip1 = buf[4],
             .ip2 = buf[5],
@@ -28,7 +26,7 @@ pub const broadcastResponse = struct {
         };
     }
 
-    pub fn host(self: broadcastResponse) []const u8 {
+    pub fn host(self: BroadcastResponse) []const u8 {
         return std.fmt.allocPrint(std.heap.page_allocator, "{}.{}.{}.{}", .{
             self.ip1,
             self.ip2,

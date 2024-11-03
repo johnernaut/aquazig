@@ -1,25 +1,22 @@
 const std = @import("std");
 
+// return the length of an object + padding so its base 4
 pub fn paddedLength(length: usize) usize {
     return length + ((4 - (length % 4)) % 4);
 }
 
-pub fn writeUInt32LE(writer: anytype, value: u32) !void {
-    try writer.writeInt(u32, value, .little);
+// read integer in little endian format
+pub fn readIntLE(comptime T: type, reader: anytype) !T {
+    return try reader.readInt(T, .little);
 }
 
-pub fn writeUInt16LE(writer: anytype, value: u16) !void {
-    try writer.writeInt(u16, value, .little);
+// write integer in little endian format
+pub fn writeIntLE(comptime T: type, writer: anytype, value: T) !void {
+    try writer.writeInt(T, value, .little);
 }
 
-pub fn readUInt16LE(reader: anytype) !u16 {
-    return try reader.readInt(u16, .little);
-}
-
-pub fn readUInt32LE(reader: anytype) !u32 {
-    return try reader.readInt(u32, .little);
-}
-
+// writes the length of a slice and then slice contents with padding for the contents so
+// its base 4
 pub fn writePaddedSlice(comptime T: type, writer: anytype, data: []const T) !void {
     const elem_size = @sizeOf(T);
     const data_len_in_bytes = data.len * elem_size;
