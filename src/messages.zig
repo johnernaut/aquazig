@@ -1,6 +1,33 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 
+pub const MessageType = enum(u16) {
+    loginQuery,
+    loginResponse,
+    statusQuery,
+    statusResponse,
+    setButtonPressQuery,
+    setButtonPressResponse,
+    controllerConfigQuery,
+    controllerConfigResponse,
+    setHeatModeQuery,
+
+    pub fn fromU16(message_value: u16) ?MessageType {
+        switch (message_value) {
+            27 => return .loginQuery,
+            28 => return .loginResponse,
+            12526 => return .statusQuery,
+            12527 => return .statusResponse,
+            12530 => return .setButtonPressQuery,
+            12531 => return .setButtonPressResponse,
+            12532 => return .controllerConfigQuery,
+            12533 => return .controllerConfigResponse,
+            12538 => return .setHeatModeQuery,
+            else => return null,
+        }
+    }
+};
+
 pub const BroadcastResponse = struct {
     chk: [4]u8,
     ip1: u8,

@@ -33,8 +33,20 @@ pub fn main() !void {
 }
 
 fn readMessage(reader: anytype) !void {
-    const id = try utils.readIntLE(u16, reader);
-    const message_type = try utils.readIntLE(u16, reader);
-    const content_length = try utils.readIntLE(u32, reader);
-    log.info("Message ID: {d}, Type: {d}, Content Length: {d}\n", .{ id, message_type, content_length });
+    _ = try utils.readIntLE(u16, reader);
+    const message_type_value = try utils.readIntLE(u16, reader);
+    const message_type = messages.MessageType.fromU16(message_type_value).?;
+    _ = try utils.readIntLE(u32, reader);
+
+    switch (message_type) {
+        .loginQuery => std.debug.print("Got login query\n", .{}),
+        .loginResponse => std.debug.print("Got login response\n", .{}),
+        .statusQuery => std.debug.print("Got status query\n", .{}),
+        .statusResponse => std.debug.print("Got status response\n", .{}),
+        .setButtonPressQuery => std.debug.print("Got set button press query\n", .{}),
+        .setButtonPressResponse => std.debug.print("Got set button press response\n", .{}),
+        .controllerConfigQuery => std.debug.print("Got controller config query\n", .{}),
+        .controllerConfigResponse => std.debug.print("Got controller config response\n", .{}),
+        .setHeatModeQuery => std.debug.print("Got set head mode query\n", .{}),
+    }
 }
