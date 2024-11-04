@@ -4,14 +4,15 @@ const net = std.net;
 const utils = @import("utils.zig");
 const clients = @import("network_clients.zig");
 const messages = @import("messages.zig");
+const xev = @import("xev");
 
 pub fn main() !void {
     const broadcastResp = try clients.UdpClient.getTcpAddress();
     log.info("Received response from host: {s}:{d}", .{ broadcastResp.host(), broadcastResp.port });
 
     // we have the pentair systems IP host and port - start interacting with it
-    const pentairAddr = try net.Address.resolveIp(broadcastResp.host(), broadcastResp.port);
-    const stream = try net.tcpConnectToAddress(pentairAddr);
+    const pentair_addr = try net.Address.resolveIp(broadcastResp.host(), broadcastResp.port);
+    const stream = try net.tcpConnectToAddress(pentair_addr);
     defer stream.close();
 
     const connectMsg = "CONNECTSERVERHOST".* ++ [4]u8{ 13, 10, 13, 10 };
