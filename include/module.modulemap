@@ -1,0 +1,4 @@
+module CAquaZig {
+    header "aquazig.h"
+    export *
+}

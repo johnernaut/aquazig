@@ -34,6 +34,54 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    // ==========================================================================
+    // Shared Library for Swift/macOS/iOS interop
+    // ==========================================================================
+
+    // Shared library (.dylib on macOS, .so on Linux)
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
+        .name = "aquazig",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/c_api.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "xev", .module = xev_module },
+            },
+        }),
+    });
+    lib.linkLibC();
+
+    // Install the shared library
+    b.installArtifact(lib);
+
+    // Install the C header
+    b.installFile("include/aquazig.h", "include/aquazig.h");
+
+    // Static library for iOS (which requires static linking)
+    const static_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "aquazig_static",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/c_api.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "xev", .module = xev_module },
+            },
+        }),
+    });
+    static_lib.linkLibC();
+
+    // Library build step
+    const lib_step = b.step("lib", "Build the shared library for FFI");
+    lib_step.dependOn(&lib.step);
+
+    // Static library build step
+    const static_step = b.step("static", "Build the static library for iOS");
+    static_step.dependOn(&static_lib.step);
+
     // Run step
     const run_step = b.step("run", "Run the CLI application");
     const run_cmd = b.addRunArtifact(exe);

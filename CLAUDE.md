@@ -104,6 +104,7 @@ zig build test      # Run tests
 - **libxev async I/O integrated** - client uses async internally with sync API
 - **Real device tested** - works with ScreenLogic at 10.0.0.9:80
 - **Pump control working** - IntelliFlo VSF tested
+- **Swift app working** - macOS SwiftUI app with full control
 
 ### Features Implemented
 - Discovery, connect, login
@@ -113,6 +114,18 @@ zig build test      # Run tests
 - Status subscriptions (push updates via AddClient)
 - Reconnection with exponential backoff
 - Ping keepalive timer
+
+### Swift/macOS App
+- XCFramework build (arm64 + x86_64 universal binary)
+- Swift wrapper with async/await API
+- Dashboard UI: pool/spa temps, heat controls, pump status, chemistry
+- Circuit controls: Spa and Pool on/off toggles
+- Discovery with fallback to direct IP connection
+- LocalizedError for user-friendly error messages
+
+### Protocol Fixes Applied
+- Login handles unexpected push messages (weather forecasts) during authentication
+- Skips non-login responses and continues reading until login_response arrives
 
 ### Test Coverage
 - Encoding utilities (padding, round-trips)

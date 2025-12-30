@@ -517,15 +517,31 @@ pub const Client = struct {
         // Check message type
         if (header.messageType()) |msg_type| {
             if (msg_type != .login_response) {
-                log.err("Unexpected login response type: {any}", .{msg_type});
-                self.last_error = error.LoginFailed;
-                self.state = .failed;
+                // Device sometimes pushes status updates before login response
+                // Skip this message and read the next one
+                log.debug("Skipping unexpected message during login: {any}", .{msg_type});
+                if (header.data_size > 0) {
+                    // Skip the data for this message, then read next header
+                    self.bytes_to_read = header.data_size;
+                    self.bytes_read = 0;
+                    self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..header.data_size] }, Self, self, loginSkipDataCallback);
+                } else {
+                    // No data to skip, read next header
+                    self.bytes_read = 0;
+                    self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..8] }, Self, self, loginReadHeaderCallback);
+                }
                 return .disarm;
             }
         } else {
-            log.err("Unknown message type in login response", .{});
-            self.last_error = error.LoginFailed;
-            self.state = .failed;
+            log.debug("Unknown message type during login, skipping", .{});
+            if (header.data_size > 0) {
+                self.bytes_to_read = header.data_size;
+                self.bytes_read = 0;
+                self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..header.data_size] }, Self, self, loginSkipDataCallback);
+            } else {
+                self.bytes_read = 0;
+                self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..8] }, Self, self, loginReadHeaderCallback);
+            }
             return .disarm;
         }
 
@@ -583,6 +599,42 @@ pub const Client = struct {
         self.logged_in = true;
         self.reconnect_attempts = 0;
         // Note: Don't start ping timer here - it would block loop.run(.until_done)
+        return .disarm;
+    }
+
+    fn loginSkipDataCallback(
+        self_opt: ?*Self,
+        loop: *xev.Loop,
+        completion: *xev.Completion,
+        socket: xev.TCP,
+        buffer: xev.ReadBuffer,
+        result: xev.ReadError!usize,
+    ) xev.CallbackAction {
+        const self = self_opt orelse return .disarm;
+        _ = completion;
+        _ = socket;
+        _ = buffer;
+
+        const bytes = result catch |err| {
+            log.err("Login skip read failed: {any}", .{err});
+            self.last_error = error.ConnectionClosed;
+            self.state = .failed;
+            return .disarm;
+        };
+
+        self.bytes_read += bytes;
+
+        if (self.bytes_read < self.bytes_to_read) {
+            // Need to read more to skip the full message
+            const remaining = self.bytes_to_read - self.bytes_read;
+            const to_read = @min(remaining, self.read_buffer.len);
+            self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..to_read] }, Self, self, loginSkipDataCallback);
+            return .disarm;
+        }
+
+        // Data skipped, now read the next message header
+        self.bytes_read = 0;
+        self.socket.?.read(loop, &self.read_completion, .{ .slice = self.read_buffer[0..8] }, Self, self, loginReadHeaderCallback);
         return .disarm;
     }
 
@@ -1080,7 +1132,7 @@ pub const Client = struct {
         self.state = .reconnecting;
 
         // Sleep for backoff delay
-        std.time.sleep(delay * std.time.ns_per_ms);
+        std.Thread.sleep(delay * std.time.ns_per_ms);
 
         // Clean up old socket if any
         if (self.socket) |*sock| {
