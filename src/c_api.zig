@@ -103,11 +103,72 @@ pub const aquazig_pump_status_t = extern struct {
     circuits: [8]aquazig_pump_circuit_t,
 };
 
-/// Circuit info - C-compatible
+/// Circuit info - C-compatible (basic, from status)
 pub const aquazig_circuit_t = extern struct {
     id: u32,
     state: bool,
-    // Name is returned separately via aquazig_get_circuit_name
+};
+
+/// Circuit info with name - C-compatible (from controller config)
+pub const aquazig_circuit_info_t = extern struct {
+    id: u32,
+    name: [32]u8, // Fixed-size buffer for circuit name (null-terminated)
+    name_index: u8,
+    function: u8, // Circuit function type
+    interface: u8,
+    freeze: u8, // Freeze protection enabled
+    device_id: u8,
+    _padding: [3]u8 = .{ 0, 0, 0 },
+};
+
+/// Full controller configuration with circuits - C-compatible
+pub const aquazig_controller_config_t = extern struct {
+    controller_id: u32,
+    controller_type: u8,
+    hardware_type: u8,
+    controller_data: u8,
+    equipment_flags: u8,
+    is_celsius: bool,
+    min_setpoint_pool: u8,
+    max_setpoint_pool: u8,
+    min_setpoint_spa: u8,
+    max_setpoint_spa: u8,
+    _padding: [3]u8 = .{ 0, 0, 0 },
+    circuit_count: u32,
+    circuits: [20]aquazig_circuit_info_t, // Max 20 circuits
+};
+
+/// Controller configuration info - C-compatible
+pub const aquazig_controller_info_t = extern struct {
+    controller_id: u32,
+    controller_type: u8,
+    hardware_type: u8,
+    controller_data: u8,
+    equipment_flags: u8,
+    is_celsius: bool,
+    min_setpoint_pool: u8,
+    max_setpoint_pool: u8,
+    min_setpoint_spa: u8,
+    max_setpoint_spa: u8,
+};
+
+/// Scheduled event - C-compatible
+pub const aquazig_scheduled_event_t = extern struct {
+    schedule_id: u32,
+    circuit_id: u32,
+    start_time: u32, // Minutes from midnight (0-1439)
+    stop_time: u32, // Minutes from midnight (0-1439)
+    day_mask: u8, // Bitmask: Sun=1, Mon=2, Tue=4, Wed=8, Thu=16, Fri=32, Sat=64
+    flags: u8, // 2 = enabled
+    heat_cmd: u8, // 0=off, 1=heater, 2=solar_pref, 3=solar, 4=no_change
+    heat_setpoint: u8,
+};
+
+/// Schedule data - C-compatible
+/// Maximum 16 events per schedule type
+pub const aquazig_schedule_t = extern struct {
+    event_count: u32,
+    events: [16]aquazig_scheduled_event_t,
 };
 
 /// Callback type for status change notifications
@@ -406,6 +467,150 @@ export fn aquazig_set_pump_speed(
     client.setPumpSpeed(pump_id, circuit_index, speed, is_rpm) catch |err| {
         return errorToCode(err);
     };
+    return AQUAZIG_OK;
+}
+
+// ============================================================================
+// Controller Config
+// ============================================================================
+
+/// Get controller configuration info
+///
+/// Parameters:
+/// - out_info: Pointer to controller info struct to fill
+///
+/// Returns: AQUAZIG_OK on success, error code on failure
+export fn aquazig_get_controller_info(
+    handle: ?*aquazig_client_t,
+    out_info: ?*aquazig_controller_info_t,
+) c_int {
+    const client = castClient(handle) orelse return AQUAZIG_ERR_NOT_CONNECTED;
+    const out = out_info orelse return AQUAZIG_ERR_INVALID_RESPONSE;
+
+    var config = client.getControllerConfig() catch |err| {
+        return errorToCode(err);
+    };
+    defer config.deinit();
+
+    // Convert to C struct
+    out.* = aquazig_controller_info_t{
+        .controller_id = config.controller_id,
+        .controller_type = config.controller_type,
+        .hardware_type = config.hardware_type,
+        .controller_data = config.controller_data,
+        .equipment_flags = config.equipment_flags,
+        .is_celsius = config.is_celsius,
+        .min_setpoint_pool = config.min_setpoint_pool,
+        .max_setpoint_pool = config.max_setpoint_pool,
+        .min_setpoint_spa = config.min_setpoint_spa,
+        .max_setpoint_spa = config.max_setpoint_spa,
+    };
+    return AQUAZIG_OK;
+}
+
+/// Get full controller configuration including circuit names
+export fn aquazig_get_controller_config(
+    handle: ?*aquazig_client_t,
+    out_config: ?*aquazig_controller_config_t,
+) c_int {
+    const client = castClient(handle) orelse return AQUAZIG_ERR_NOT_CONNECTED;
+    const out = out_config orelse return AQUAZIG_ERR_INVALID_RESPONSE;
+
+    var config = client.getControllerConfig() catch |err| {
+        return errorToCode(err);
+    };
+    defer config.deinit();
+
+    // Convert to C struct
+    out.* = aquazig_controller_config_t{
+        .controller_id = config.controller_id,
+        .controller_type = config.controller_type,
+        .hardware_type = config.hardware_type,
+        .controller_data = config.controller_data,
+        .equipment_flags = config.equipment_flags,
+        .is_celsius = config.is_celsius,
+        .min_setpoint_pool = config.min_setpoint_pool,
+        .max_setpoint_pool = config.max_setpoint_pool,
+        .min_setpoint_spa = config.min_setpoint_spa,
+        .max_setpoint_spa = config.max_setpoint_spa,
+        .circuit_count = @min(@as(u32, @intCast(config.circuits.len)), 20),
+        .circuits = undefined,
+    };
+
+    // Copy circuit info
+    for (out.circuits[0..out.circuit_count], 0..) |*c, i| {
+        const circuit = config.circuits[i];
+
+        // Copy name to fixed buffer (null-terminated)
+        var name_buf: [32]u8 = [_]u8{0} ** 32;
+        const copy_len = @min(circuit.name.len, 31);
+        @memcpy(name_buf[0..copy_len], circuit.name[0..copy_len]);
+
+        c.* = aquazig_circuit_info_t{
+            .id = circuit.id,
+            .name = name_buf,
+            .name_index = circuit.name_index,
+            .function = circuit.function,
+            .interface = circuit.interface,
+            .freeze = circuit.freeze,
+            .device_id = circuit.device_id,
+        };
+    }
+
+    // Zero out remaining circuits
+    for (out.circuits[out.circuit_count..]) |*c| {
+        c.* = std.mem.zeroes(aquazig_circuit_info_t);
+    }
+
+    return AQUAZIG_OK;
+}
+
+// ============================================================================
+// Schedule
+// ============================================================================
+
+/// Get schedule data
+///
+/// Parameters:
+/// - schedule_type: 0 = recurring schedules, 1 = one-time (run-once) events
+/// - out_schedule: Pointer to schedule struct to fill
+///
+/// Returns: AQUAZIG_OK on success, error code on failure
+export fn aquazig_get_schedule(
+    handle: ?*aquazig_client_t,
+    schedule_type: u32,
+    out_schedule: ?*aquazig_schedule_t,
+) c_int {
+    const client = castClient(handle) orelse return AQUAZIG_ERR_NOT_CONNECTED;
+    const out = out_schedule orelse return AQUAZIG_ERR_INVALID_RESPONSE;
+
+    var sched = client.getSchedule(schedule_type) catch |err| {
+        return errorToCode(err);
+    };
+    defer sched.deinit();
+
+    // Convert to C struct
+    out.event_count = @intCast(@min(sched.events.len, 16));
+
+    // Initialize all events to zero first
+    for (&out.events) |*e| {
+        e.* = std.mem.zeroes(aquazig_scheduled_event_t);
+    }
+
+    // Copy events
+    for (sched.events[0..out.event_count], 0..) |event, i| {
+        out.events[i] = .{
+            .schedule_id = event.schedule_id,
+            .circuit_id = event.circuit_id,
+            .start_time = event.start_time,
+            .stop_time = event.stop_time,
+            .day_mask = event.day_mask,
+            .flags = event.flags,
+            .heat_cmd = @intFromEnum(event.heat_cmd),
+            .heat_setpoint = event.heat_setpoint,
+        };
+    }
+
     return AQUAZIG_OK;
 }
 

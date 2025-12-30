@@ -25,6 +25,11 @@ class PoolViewModel: ObservableObject {
     // Data
     @Published var status: PoolStatus?
     @Published var pumpStatus: PumpStatus?
+    @Published var controllerConfig: ControllerConfig?
+    @Published var schedule: Schedule?
+
+    // Convenience accessor for backward compatibility
+    var controllerInfo: ControllerConfig? { controllerConfig }
 
     // Computed properties
     var poolBody: BodyStatus? {
@@ -40,6 +45,11 @@ class PoolViewModel: ObservableObject {
     var hasChemistry: Bool {
         guard let s = status else { return false }
         return s.ph != nil || s.orp != nil || s.saltPPM != nil
+    }
+
+    /// Get circuit name by ID, falling back to "Circuit {id}" if not found
+    func circuitName(forId id: UInt32) -> String {
+        controllerConfig?.circuitName(forId: id) ?? "Circuit \(id)"
     }
 
     // MARK: - Actions
@@ -59,9 +69,11 @@ class PoolViewModel: ObservableObject {
             }
             isConnected = true
 
-            // Get initial status
+            // Get initial status and config
             status = try await client.getStatus()
             pumpStatus = try await client.getPumpStatus()
+            controllerConfig = try await client.getControllerConfig()
+            schedule = try? await client.getSchedule()  // Don't fail connect if schedule fails
 
             // Subscribe to push updates
             try await client.subscribeToStatusChanges()
@@ -78,6 +90,8 @@ class PoolViewModel: ObservableObject {
         isConnected = false
         status = nil
         pumpStatus = nil
+        controllerConfig = nil
+        schedule = nil
     }
 
     func refresh() async {

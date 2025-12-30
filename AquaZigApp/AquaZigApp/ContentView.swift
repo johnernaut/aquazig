@@ -125,7 +125,7 @@ struct DashboardView: View {
             VStack(spacing: 20) {
                 // Status header
                 if let status = viewModel.status {
-                    StatusHeaderView(status: status)
+                    StatusHeaderView(status: status, controllerInfo: viewModel.controllerInfo)
                 }
 
                 // Body cards
@@ -161,6 +161,11 @@ struct DashboardView: View {
                 if viewModel.hasChemistry {
                     ChemistryCard()
                 }
+
+                // Schedules
+                if let schedule = viewModel.schedule, !schedule.events.isEmpty {
+                    ScheduleCard(schedule: schedule)
+                }
             }
             .padding()
         }
@@ -171,25 +176,42 @@ struct DashboardView: View {
 
 struct StatusHeaderView: View {
     let status: PoolStatus
+    let controllerInfo: ControllerConfig?
 
     var body: some View {
-        HStack {
-            Label("\(status.airTemp)°F", systemImage: "thermometer.medium")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("\(status.airTemp)°F", systemImage: "thermometer.medium")
+                    .font(.headline)
 
-            Spacer()
+                Spacer()
 
-            if status.freezeMode {
-                Label("Freeze Protection", systemImage: "snowflake")
-                    .foregroundColor(.blue)
+                if status.freezeMode {
+                    Label("Freeze Protection", systemImage: "snowflake")
+                        .foregroundColor(.blue)
+                }
+
+                if status.ok {
+                    Label("System OK", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Label("System Alert", systemImage: "exclamationmark.circle.fill")
+                        .foregroundColor(.orange)
+                }
             }
 
-            if status.ok {
-                Label("System OK", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            } else {
-                Label("System Alert", systemImage: "exclamationmark.circle.fill")
-                    .foregroundColor(.orange)
+            if let info = controllerInfo {
+                HStack {
+                    Label(info.hardwareTypeDescription, systemImage: "cpu")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text("ID: \(info.controllerId)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding()
@@ -478,6 +500,86 @@ struct CircuitControlCard: View {
         .padding()
         .background(.regularMaterial)
         .cornerRadius(12)
+    }
+}
+
+// MARK: - Schedule Card
+
+struct ScheduleCard: View {
+    let schedule: Schedule
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Schedules", systemImage: "calendar.badge.clock")
+                .font(.headline)
+
+            Divider()
+
+            ForEach(schedule.events) { event in
+                ScheduleEventRow(event: event)
+                if event.id != schedule.events.last?.id {
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .background(.regularMaterial)
+        .cornerRadius(12)
+    }
+}
+
+struct ScheduleEventRow: View {
+    @EnvironmentObject var viewModel: PoolViewModel
+    let event: ScheduledEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(viewModel.circuitName(forId: event.circuitId))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+
+                Spacer()
+
+                if event.isEnabled {
+                    Label("Active", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else {
+                    Label("Disabled", systemImage: "xmark.circle")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Image(systemName: "clock")
+                    .foregroundColor(.secondary)
+                Text("\(event.startTimeFormatted) - \(event.stopTimeFormatted)")
+                    .font(.subheadline)
+
+                Spacer()
+
+                Text(event.dayMask.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if event.heatCmd != .noChange {
+                HStack {
+                    Image(systemName: "flame")
+                        .foregroundColor(.orange)
+                    Text("\(event.heatCmd.description)")
+                        .font(.caption)
+                    if event.heatSetpoint > 0 {
+                        Text("@ \(event.heatSetpoint)°")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

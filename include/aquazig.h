@@ -144,6 +144,77 @@ typedef struct {
     bool state;              /* true=on, false=off */
 } aquazig_circuit_t;
 
+/**
+ * Controller info (basic)
+ */
+typedef struct {
+    uint32_t controller_id;      /* Controller ID */
+    uint8_t controller_type;     /* Controller type */
+    uint8_t hardware_type;       /* Hardware type (EasyTouch, IntelliTouch, etc.) */
+    uint8_t controller_data;     /* Controller data byte */
+    uint8_t equipment_flags;     /* Equipment flags */
+    bool is_celsius;             /* true if using Celsius */
+    uint8_t min_setpoint_pool;   /* Min pool setpoint */
+    uint8_t max_setpoint_pool;   /* Max pool setpoint */
+    uint8_t min_setpoint_spa;    /* Min spa setpoint */
+    uint8_t max_setpoint_spa;    /* Max spa setpoint */
+} aquazig_controller_info_t;
+
+/**
+ * Circuit info with name
+ */
+typedef struct {
+    uint32_t id;                 /* Circuit ID */
+    char name[32];               /* Circuit name (null-terminated) */
+    uint8_t name_index;          /* Name index */
+    uint8_t function;            /* Circuit function type */
+    uint8_t interface;           /* Interface type */
+    uint8_t freeze;              /* Freeze protection enabled */
+    uint8_t device_id;           /* Device ID */
+    uint8_t _padding[3];         /* Padding for alignment */
+} aquazig_circuit_info_t;
+
+/**
+ * Full controller configuration with circuits
+ */
+typedef struct {
+    uint32_t controller_id;      /* Controller ID */
+    uint8_t controller_type;     /* Controller type */
+    uint8_t hardware_type;       /* Hardware type */
+    uint8_t controller_data;     /* Controller data byte */
+    uint8_t equipment_flags;     /* Equipment flags */
+    bool is_celsius;             /* true if using Celsius */
+    uint8_t min_setpoint_pool;   /* Min pool setpoint */
+    uint8_t max_setpoint_pool;   /* Max pool setpoint */
+    uint8_t min_setpoint_spa;    /* Min spa setpoint */
+    uint8_t max_setpoint_spa;    /* Max spa setpoint */
+    uint8_t _padding[3];         /* Padding for alignment */
+    uint32_t circuit_count;      /* Number of circuits */
+    aquazig_circuit_info_t circuits[20];  /* Circuit array */
+} aquazig_controller_config_t;
+
+/**
+ * Scheduled event
+ */
+typedef struct {
+    uint32_t schedule_id;        /* Schedule ID */
+    uint32_t circuit_id;         /* Circuit ID */
+    uint32_t start_time;         /* Start time (minutes from midnight) */
+    uint32_t stop_time;          /* Stop time (minutes from midnight) */
+    uint8_t day_mask;            /* Day mask (Sun=1, Mon=2, Tue=4, etc.) */
+    uint8_t flags;               /* Flags (bit 1 = enabled) */
+    uint8_t heat_cmd;            /* Heat command */
+    uint8_t heat_setpoint;       /* Heat setpoint */
+} aquazig_scheduled_event_t;
+
+/**
+ * Schedule (collection of events)
+ */
+typedef struct {
+    uint32_t event_count;                    /* Number of events */
+    aquazig_scheduled_event_t events[16];    /* Events array */
+} aquazig_schedule_t;
+
 /* ============================================================================
  * Callback Types
  * ============================================================================ */
@@ -393,6 +464,52 @@ int aquazig_unsubscribe_status(aquazig_client_t* client);
  * @return  true if subscribed, false otherwise
  */
 bool aquazig_is_subscribed(aquazig_client_t* client);
+
+/* ============================================================================
+ * Controller Info
+ * ============================================================================ */
+
+/**
+ * Get controller info (basic)
+ *
+ * @param client    Client handle
+ * @param out_info  Pointer to controller info struct to fill
+ * @return  AQUAZIG_OK on success, error code on failure
+ */
+int aquazig_get_controller_info(
+    aquazig_client_t* client,
+    aquazig_controller_info_t* out_info
+);
+
+/**
+ * Get full controller configuration including circuit names
+ *
+ * @param client      Client handle
+ * @param out_config  Pointer to controller config struct to fill
+ * @return  AQUAZIG_OK on success, error code on failure
+ */
+int aquazig_get_controller_config(
+    aquazig_client_t* client,
+    aquazig_controller_config_t* out_config
+);
+
+/* ============================================================================
+ * Schedules
+ * ============================================================================ */
+
+/**
+ * Get schedule
+ *
+ * @param client         Client handle
+ * @param schedule_type  0 = recurring schedules, 1 = one-time (run-once) events
+ * @param out_schedule   Pointer to schedule struct to fill
+ * @return  AQUAZIG_OK on success, error code on failure
+ */
+int aquazig_get_schedule(
+    aquazig_client_t* client,
+    uint32_t schedule_type,
+    aquazig_schedule_t* out_schedule
+);
 
 #ifdef __cplusplus
 }

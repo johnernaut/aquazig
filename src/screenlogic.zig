@@ -44,6 +44,7 @@ pub const protocol = struct {
     pub const encoding = @import("protocol/encoding.zig");
     pub const responses = @import("protocol/responses.zig");
     pub const pump = @import("protocol/pump.zig");
+    pub const schedule = @import("protocol/schedule.zig");
 };
 
 // Re-export commonly used types
@@ -63,6 +64,12 @@ pub const ChemData = protocol.responses.ChemData;
 pub const PumpStatus = protocol.pump.PumpStatus;
 pub const PumpType = protocol.pump.PumpType;
 pub const PumpCircuit = protocol.pump.PumpCircuit;
+
+// Schedule types
+pub const Schedule = protocol.schedule.Schedule;
+pub const ScheduledEvent = protocol.schedule.ScheduledEvent;
+pub const DayMask = protocol.schedule.DayMask;
+pub const HeatCommand = protocol.schedule.HeatCommand;
 
 // Version info
 pub const version = "0.1.0";
@@ -86,6 +93,7 @@ test {
     _ = @import("protocol/messages.zig");
     _ = @import("protocol/responses.zig");
     _ = @import("protocol/pump.zig");
+    _ = @import("protocol/schedule.zig");
 }
 
 test "library version" {

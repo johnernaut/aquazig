@@ -9,6 +9,7 @@ const messages = @import("protocol/messages.zig");
 const encoding = @import("protocol/encoding.zig");
 const responses = @import("protocol/responses.zig");
 const pump = @import("protocol/pump.zig");
+const schedule = @import("protocol/schedule.zig");
 
 // Client Architecture
 //
@@ -866,6 +867,34 @@ pub const Client = struct {
         }
 
         return try responses.ControllerConfig.parse(response.data, self.allocator);
+    }
+
+    /// Get schedule data from the controller
+    ///
+    /// Parameters:
+    ///   schedule_type: 0 = recurring schedules, 1 = one-time (run-once) events
+    ///
+    /// Returns: Schedule struct containing all scheduled events.
+    /// Caller must call deinit() on the returned struct.
+    pub fn getSchedule(self: *Self, schedule_type: u32) !schedule.Schedule {
+        if (!self.logged_in) return error.NotConnected;
+
+        var msg_buf: [32]u8 = undefined;
+        var msg_stream = std.io.fixedBufferStream(&msg_buf);
+
+        const query = messages.GetScheduleQuery{ .schedule_type = schedule_type };
+        try query.serialize(msg_stream.writer());
+
+        const response = try self.sendAndReceive(msg_stream.getWritten(), .get_schedule_response);
+
+        if (response.header.messageType()) |msg_type| {
+            if (msg_type != .get_schedule_response) {
+                log.warn("Unexpected response type: {any}", .{msg_type});
+                return error.UnexpectedMessage;
+            }
+        }
+
+        return try schedule.Schedule.parse(response.data, self.allocator);
     }
 
     /// Set circuit state (turn on/off)

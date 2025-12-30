@@ -40,6 +40,7 @@ MSG_CD1 (u16 LE) | MSG_CD2 (u16 LE) | Data Size (u32 LE) | Data
 - 12530/12531: Button press (circuit control)
 - 12532/12533: Get controller config
 - 12538/12539: Set heat mode
+- 12542/12543: Get schedule (recurring or one-time)
 - 12584/12585: Get pump status
 - 12586/12587: Set pump speed
 - 12500: Async equipment state (push notification)
@@ -54,28 +55,34 @@ MSG_CD1 (u16 LE) | MSG_CD2 (u16 LE) | Data Size (u32 LE) | Data
 src/
 ├── screenlogic.zig      # Public API - re-exports types
 ├── client.zig           # High-level Client struct (async via libxev)
+├── c_api.zig            # C-compatible API for Swift/FFI
 ├── discovery.zig        # UDP broadcast discovery
 ├── main.zig             # CLI app
 └── protocol/
     ├── encoding.zig     # Encoding utilities
     ├── messages.zig     # Message types & serialization
     ├── responses.zig    # Response parsing
-    └── pump.zig         # Pump status and control
+    ├── pump.zig         # Pump status and control
+    └── schedule.zig     # Schedule parsing (events, day masks)
 ```
 
 ## Key Types
 
 - `Client` - Main interface, handles connection/auth (libxev async internally)
 - `PoolStatus` - Pool/spa temperatures, circuit states, chemistry
-- `ControllerConfig` - Controller info, circuit definitions
+- `ControllerConfig` - Controller info (hardware type, setpoint limits, circuits with names)
+- `Circuit` - Circuit definition with ID, name, function, freeze protection
 - `BodyStatus` - Pool or spa body (temp, heat mode, setpoints)
 - `PumpStatus` - Pump type, running state, RPM/GPM/watts, circuit configs
+- `Schedule` - Collection of scheduled events
+- `ScheduledEvent` - Individual schedule (circuit, times, day mask, heat settings)
 - `MessageType` - Enum of all protocol message codes
 
 ## Protocol Bugs Fixed
 
 1. **UDP Discovery**: Was sending 1 byte, now sends 8 bytes
 2. **Port Parsing**: Now uses proper little-endian read
+3. **Schedule Parsing**: All fields are u32 (not u8 for day_mask/flags/heat_cmd/heat_setpoint)
 
 ## Code Style
 
@@ -98,7 +105,7 @@ zig build test      # Run tests
 
 ## Current State
 
-- Build passes, 46+ tests passing
+- Build passes, 50+ tests passing
 - Library structure complete
 - Protocol implementation done
 - **libxev async I/O integrated** - client uses async internally with sync API
@@ -109,8 +116,10 @@ zig build test      # Run tests
 ### Features Implemented
 - Discovery, connect, login
 - Pool/spa status, controller config
+- Controller info (hardware type, equipment flags)
 - Circuit control, heat mode, temperature setpoints
 - Pump status and speed control
+- Schedule retrieval (recurring and one-time events)
 - Status subscriptions (push updates via AddClient)
 - Reconnection with exponential backoff
 - Ping keepalive timer
@@ -119,7 +128,10 @@ zig build test      # Run tests
 - XCFramework build (arm64 + x86_64 universal binary)
 - Swift wrapper with async/await API
 - Dashboard UI: pool/spa temps, heat controls, pump status, chemistry
-- Circuit controls: Spa and Pool on/off toggles
+- Controller info display (hardware type, controller ID)
+- Circuit names from controller config (Pool, Spa, Cleaner, etc.)
+- Schedule display with circuit names, times, and active days
+- Circuit controls: Spa, Pool, and High Speed toggles
 - Discovery with fallback to direct IP connection
 - LocalizedError for user-friendly error messages
 
@@ -129,7 +141,8 @@ zig build test      # Run tests
 
 ### Test Coverage
 - Encoding utilities (padding, round-trips)
-- All message serialization
+- All message serialization (including GetScheduleQuery)
 - Response parsing with realistic packet data
 - Discovery response parsing
 - Pump status parsing
+- Schedule parsing (events, day masks, time formatting)

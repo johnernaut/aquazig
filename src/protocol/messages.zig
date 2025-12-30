@@ -339,6 +339,28 @@ pub const GetControllerConfigQuery = struct {
     }
 };
 
+/// Get Schedule Data query (message code 12542)
+///
+/// Wire format:
+/// ```
+/// | Header (8 bytes, data_size = 8) |
+/// | schedule_type (u32 LE)          | 0 = recurring, 1 = one-time (run-once)
+/// | reserved (u32 LE)               | Always 0
+/// ```
+///
+/// Response: Message code 12543 with schedule event data (see schedule.zig)
+pub const GetScheduleQuery = struct {
+    schedule_type: u32 = 0, // 0 = recurring schedules, 1 = one-time/run-once
+
+    pub fn serialize(self: GetScheduleQuery, writer: anytype) !void {
+        try encoding.writeIntLE(u16, writer, 0);
+        try encoding.writeIntLE(u16, writer, 12542); // get_schedule_query
+        try encoding.writeIntLE(u32, writer, 8); // data_size
+        try encoding.writeIntLE(u32, writer, self.schedule_type);
+        try encoding.writeIntLE(u32, writer, 0); // reserved
+    }
+};
+
 /// Add Client query - register for push status updates (message code 12522)
 ///
 /// Wire format:
@@ -632,4 +654,34 @@ test "GetControllerConfigQuery serialization" {
     try testing.expectEqual(@as(u16, 0), std.mem.readInt(u16, written[0..2], .little));
     try testing.expectEqual(@as(u16, 12532), std.mem.readInt(u16, written[2..4], .little));
     try testing.expectEqual(@as(u32, 8), std.mem.readInt(u32, written[4..8], .little));
+}
+
+test "GetScheduleQuery serialization" {
+    var buffer: [32]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buffer);
+
+    // Default schedule_type = 0 (recurring)
+    const query = GetScheduleQuery{};
+    try query.serialize(stream.writer());
+
+    const written = stream.getWritten();
+    try testing.expectEqual(@as(usize, 16), written.len);
+
+    try testing.expectEqual(@as(u16, 0), std.mem.readInt(u16, written[0..2], .little));
+    try testing.expectEqual(@as(u16, 12542), std.mem.readInt(u16, written[2..4], .little)); // get_schedule_query
+    try testing.expectEqual(@as(u32, 8), std.mem.readInt(u32, written[4..8], .little)); // data_size
+    try testing.expectEqual(@as(u32, 0), std.mem.readInt(u32, written[8..12], .little)); // schedule_type
+    try testing.expectEqual(@as(u32, 0), std.mem.readInt(u32, written[12..16], .little)); // reserved
+}
+
+test "GetScheduleQuery with one-time schedules" {
+    var buffer: [32]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buffer);
+
+    // schedule_type = 1 (one-time/run-once)
+    const query = GetScheduleQuery{ .schedule_type = 1 };
+    try query.serialize(stream.writer());
+
+    const written = stream.getWritten();
+    try testing.expectEqual(@as(u32, 1), std.mem.readInt(u32, written[8..12], .little)); // schedule_type
 }

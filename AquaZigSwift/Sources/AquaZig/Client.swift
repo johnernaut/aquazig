@@ -305,4 +305,58 @@ public class AquaZigClient: ObservableObject {
         _ = try await getStatus()
         _ = try await getPumpStatus()
     }
+
+    /// Get controller configuration info (basic)
+    public func getControllerInfo() async throws -> ControllerInfo {
+        guard let h = handle else { throw AquaZigError.notConnected }
+
+        var cInfo = aquazig_controller_info_t()
+
+        let result = await Task.detached {
+            aquazig_get_controller_info(h, &cInfo)
+        }.value
+
+        if let err = AquaZigError.from(code: result) {
+            throw err
+        }
+
+        return ControllerInfo(from: cInfo)
+    }
+
+    /// Get full controller configuration including circuit names
+    public func getControllerConfig() async throws -> ControllerConfig {
+        guard let h = handle else { throw AquaZigError.notConnected }
+
+        var cConfig = aquazig_controller_config_t()
+
+        let result = await Task.detached {
+            aquazig_get_controller_config(h, &cConfig)
+        }.value
+
+        if let err = AquaZigError.from(code: result) {
+            throw err
+        }
+
+        return ControllerConfig(from: cConfig)
+    }
+
+    /// Get schedule data
+    ///
+    /// - Parameter scheduleType: 0 = recurring schedules, 1 = one-time (run-once) events
+    /// - Returns: Schedule containing all events
+    public func getSchedule(scheduleType: UInt32 = 0) async throws -> Schedule {
+        guard let h = handle else { throw AquaZigError.notConnected }
+
+        var cSchedule = aquazig_schedule_t()
+
+        let result = await Task.detached {
+            aquazig_get_schedule(h, scheduleType, &cSchedule)
+        }.value
+
+        if let err = AquaZigError.from(code: result) {
+            throw err
+        }
+
+        return Schedule(from: cSchedule)
+    }
 }

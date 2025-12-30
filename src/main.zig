@@ -139,6 +139,34 @@ pub fn main() !void {
         print("Failed to get pump status: {any}\n", .{err});
     }
 
+    // Get schedules
+    print("\n--- Schedules ---\n", .{});
+    if (client.getSchedule(0)) |sched_const| {
+        var sched = sched_const;
+        defer sched.deinit();
+        print("Found {d} scheduled events:\n", .{sched.events.len});
+        for (sched.events) |event| {
+            // Find circuit name
+            var circuit_name: []const u8 = "Unknown";
+            for (config.circuits) |c| {
+                if (c.id == event.circuit_id) {
+                    circuit_name = c.name;
+                    break;
+                }
+            }
+            print("  Schedule {d}: Circuit {d} ({s})\n", .{ event.schedule_id, event.circuit_id, circuit_name });
+            print("    Time: {d:0>2}:{d:0>2} - {d:0>2}:{d:0>2}\n", .{
+                event.start_time / 60,
+                event.start_time % 60,
+                event.stop_time / 60,
+                event.stop_time % 60,
+            });
+            print("    Days: 0x{X:0>2}, Enabled: {}\n", .{ event.day_mask, event.isEnabled() });
+        }
+    } else |err| {
+        print("Failed to get schedules: {any}\n", .{err});
+    }
+
     print("\n====================================\n", .{});
     print("Done!\n", .{});
 }
