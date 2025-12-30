@@ -12,6 +12,7 @@
 		A1000002229A0001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012229A0001 /* ContentView.swift */; };
 		A1000003229A0001 /* PoolViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013229A0001 /* PoolViewModel.swift */; };
 		A1000004229A0001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000014229A0001 /* Assets.xcassets */; };
+		A1000005229A0001 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016229A0001 /* MenuBarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		A1000013229A0001 /* PoolViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolViewModel.swift; sourceTree = "<group>"; };
 		A1000014229A0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000015229A0001 /* AquaZigApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AquaZigApp.entitlements; sourceTree = "<group>"; };
+		A1000016229A0001 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		A1000020229A0001 /* AquaZigApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AquaZigApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -56,6 +58,7 @@
 			children = (
 				A1000011229A0001 /* AquaZigApp.swift */,
 				A1000012229A0001 /* ContentView.swift */,
+				A1000016229A0001 /* MenuBarView.swift */,
 				A1000043229A0001 /* ViewModels */,
 				A1000014229A0001 /* Assets.xcassets */,
 				A1000015229A0001 /* AquaZigApp.entitlements */,
@@ -157,6 +160,7 @@
 				A1000001229A0001 /* AquaZigApp.swift in Sources */,
 				A1000002229A0001 /* ContentView.swift in Sources */,
 				A1000003229A0001 /* PoolViewModel.swift in Sources */,
+				A1000005229A0001 /* MenuBarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
