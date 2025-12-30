@@ -59,14 +59,7 @@ class PoolViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            // Try discovery first, fall back to known IP
-            do {
-                try await client.discoverAndConnect()
-            } catch {
-                // Discovery failed, try direct connection to known IP
-                print("Discovery failed: \(error.localizedDescription), trying direct connection...")
-                try await client.connect(host: "10.0.0.9", port: 80)
-            }
+            try await client.discoverAndConnect()
             isConnected = true
 
             // Get initial status and config
