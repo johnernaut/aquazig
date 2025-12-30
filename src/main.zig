@@ -1,53 +1,144 @@
 const std = @import("std");
-const log = std.log;
-const net = std.net;
-const utils = @import("utils.zig");
-const clients = @import("network_clients.zig");
-const messages = @import("messages.zig");
-const xev = @import("xev");
+const screenlogic = @import("screenlogic");
+
+const print = std.debug.print;
 
 pub fn main() !void {
-    const broadcastResp = try clients.UdpClient.getTcpAddress();
-    log.info("Received response from host: {s}:{d}", .{ broadcastResp.host(), broadcastResp.port });
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    // we have the pentair systems IP host and port - start interacting with it
-    const pentair_addr = try net.Address.resolveIp(broadcastResp.host(), broadcastResp.port);
-    const stream = try net.tcpConnectToAddress(pentair_addr);
-    defer stream.close();
+    print("\n", .{});
+    print("====================================\n", .{});
+    print("  AquaZig - ScreenLogic Controller\n", .{});
+    print("  Version {s}\n", .{screenlogic.version});
+    print("====================================\n\n", .{});
 
-    const connectMsg = "CONNECTSERVERHOST".* ++ [4]u8{ 13, 10, 13, 10 };
-    const writer = stream.writer();
+    // Create client
+    var client = try screenlogic.createClient(allocator);
+    defer client.deinit();
 
-    _ = try writer.writeAll(&connectMsg);
+    // Discover and connect
+    print("Searching for ScreenLogic devices...\n", .{});
 
-    const allocator = std.heap.page_allocator;
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
+    client.discoverAndConnect() catch |err| {
+        print("Failed to connect: {any}\n", .{err});
+        print("\nTip: Make sure your ScreenLogic device is on the same network.\n", .{});
+        return;
+    };
 
-    const login_msg = messages.LoginMessage.init();
-    try login_msg.serialize(&buffer.writer());
+    print("Connected!\n\n", .{});
 
-    _ = try writer.writeAll(buffer.items[0..buffer.items.len]);
+    // Get controller configuration
+    print("--- Controller Configuration ---\n", .{});
+    var config = client.getControllerConfig() catch |err| {
+        print("Failed to get config: {any}\n", .{err});
+        return;
+    };
+    defer config.deinit();
 
-    const reader = stream.reader();
-    try readMessage(reader);
-}
+    print("Controller ID: {d}\n", .{config.controller_id});
+    print("Pool setpoint range: {d}F - {d}F\n", .{ config.min_setpoint_pool, config.max_setpoint_pool });
+    print("Spa setpoint range: {d}F - {d}F\n", .{ config.min_setpoint_spa, config.max_setpoint_spa });
+    print("Temperature unit: {s}\n", .{if (config.is_celsius) "Celsius" else "Fahrenheit"});
 
-fn readMessage(reader: anytype) !void {
-    _ = try utils.readIntLE(u16, reader);
-    const message_type_value = try utils.readIntLE(u16, reader);
-    const message_type = messages.MessageType.fromU16(message_type_value).?;
-    _ = try utils.readIntLE(u32, reader);
-
-    switch (message_type) {
-        .loginQuery => std.debug.print("Got login query\n", .{}),
-        .loginResponse => std.debug.print("Got login response\n", .{}),
-        .statusQuery => std.debug.print("Got status query\n", .{}),
-        .statusResponse => std.debug.print("Got status response\n", .{}),
-        .setButtonPressQuery => std.debug.print("Got set button press query\n", .{}),
-        .setButtonPressResponse => std.debug.print("Got set button press response\n", .{}),
-        .controllerConfigQuery => std.debug.print("Got controller config query\n", .{}),
-        .controllerConfigResponse => std.debug.print("Got controller config response\n", .{}),
-        .setHeatModeQuery => std.debug.print("Got set head mode query\n", .{}),
+    if (config.circuits.len > 0) {
+        print("\nCircuits:\n", .{});
+        for (config.circuits) |circuit| {
+            print("  [{d}] {s}\n", .{ circuit.id, circuit.name });
+        }
     }
+
+    // Get pool status
+    print("\n--- Pool Status ---\n", .{});
+    var status = client.getStatus() catch |err| {
+        print("Failed to get status: {any}\n", .{err});
+        return;
+    };
+    defer status.deinit();
+
+    print("System OK: {}\n", .{status.ok});
+    print("Freeze mode: {}\n", .{status.freeze_mode});
+    print("Air temp: {d}F\n", .{status.air_temp});
+
+    if (status.bodies.pool) |pool| {
+        print("\nPool:\n", .{});
+        print("  Current temp: {d}F\n", .{pool.current_temp});
+        print("  Heat setpoint: {d}F\n", .{pool.heat_setpoint});
+        print("  Heat mode: {s}\n", .{@tagName(pool.heat_mode)});
+        print("  Heater running: {}\n", .{pool.heat_status});
+    }
+
+    if (status.bodies.spa) |spa| {
+        print("\nSpa:\n", .{});
+        print("  Current temp: {d}F\n", .{spa.current_temp});
+        print("  Heat setpoint: {d}F\n", .{spa.heat_setpoint});
+        print("  Heat mode: {s}\n", .{@tagName(spa.heat_mode)});
+        print("  Heater running: {}\n", .{spa.heat_status});
+    }
+
+    if (status.circuits.len > 0) {
+        print("\nActive circuits:\n", .{});
+        var has_active = false;
+        for (status.circuits) |circuit| {
+            if (circuit.state) {
+                has_active = true;
+                // Try to find circuit name from config
+                var name: []const u8 = "Unknown";
+                for (config.circuits) |c| {
+                    if (c.id == circuit.id) {
+                        name = c.name;
+                        break;
+                    }
+                }
+                print("  [{d}] {s} - ON\n", .{ circuit.id, name });
+            }
+        }
+        if (!has_active) {
+            print("  (none)\n", .{});
+        }
+    }
+
+    // Chemistry data if available
+    if (status.ph != null or status.orp != null or status.salt_ppm != null) {
+        print("\nChemistry:\n", .{});
+        if (status.ph) |ph| {
+            print("  pH: {d:.2}\n", .{ph});
+        }
+        if (status.orp) |orp| {
+            print("  ORP: {d} mV\n", .{orp});
+        }
+        if (status.salt_ppm) |salt| {
+            print("  Salt: {d} ppm\n", .{salt});
+        }
+        if (status.saturation) |sat| {
+            print("  Saturation index: {d:.2}\n", .{sat});
+        }
+    }
+
+    // Get pump status (pump 0)
+    print("\n--- Pump Status ---\n", .{});
+    if (client.getPumpStatus(0)) |pump_status| {
+        print("Type: {s}\n", .{@tagName(pump_status.pump_type)});
+        print("Running: {}\n", .{pump_status.is_running});
+        print("Power: {d} watts\n", .{pump_status.watts});
+        print("Speed: {d} RPM, {d} GPM\n", .{ pump_status.rpm, pump_status.gpm });
+
+        print("\nCircuit speed presets:\n", .{});
+        for (pump_status.circuits, 0..) |circuit, i| {
+            if (circuit.circuit_id != 0) {
+                print("  [{d}] Circuit {d}: {d} {s}\n", .{
+                    i,
+                    circuit.circuit_id,
+                    circuit.speed,
+                    if (circuit.is_rpm) "RPM" else "GPM",
+                });
+            }
+        }
+    } else |err| {
+        print("Failed to get pump status: {any}\n", .{err});
+    }
+
+    print("\n====================================\n", .{});
+    print("Done!\n", .{});
 }
