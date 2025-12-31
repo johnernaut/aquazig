@@ -112,6 +112,7 @@ struct MenuBarView: View {
 
                 Button {
                     openWindow()
+                    NSApp.activate(ignoringOtherApps: true)
                 } label: {
                     Label("Open Dashboard", systemImage: "macwindow")
                         .frame(maxWidth: .infinity, alignment: .leading)
